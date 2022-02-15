@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.0.0">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" integrity="sha256-mUZM63G8m73Mcidfrv5E+Y61y7a12O5mW4ezU3bxqW4=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"basonson.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":false,"version":"8.10.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":false,"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js"></script>
+
+  <meta name="description" content="1.  数据库1.1  数据库结构一个Redis服务器中有多个（默认16个）数据库。这些数据库都保存在redisServer结构中，每一个数据库都是一个redisDB结构，如下图： ​redisServer代码示意 初始化服务器时，程序会根据dbnum属性来决定创建多少个数据库。如下图： ​redisServer结构示意 每个Redis客户端都有自己的目标数据库，可以用SELECT命令进行切换。在">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Redis技术总结4-持久化">
+<meta property="og:url" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/index.html">
+<meta property="og:site_name" content="大牙技术">
+<meta property="og:description" content="1.  数据库1.1  数据库结构一个Redis服务器中有多个（默认16个）数据库。这些数据库都保存在redisServer结构中，每一个数据库都是一个redisDB结构，如下图： ​redisServer代码示意 初始化服务器时，程序会根据dbnum属性来决定创建多少个数据库。如下图： ​redisServer结构示意 每个Redis客户端都有自己的目标数据库，可以用SELECT命令进行切换。在">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/1.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/2.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/3.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/4.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/5.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/6.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/7.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/8.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/9.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/10.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/11.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/12.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/13.png">
+<meta property="og:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/14.png">
+<meta property="article:published_time" content="2022-02-15T01:32:49.000Z">
+<meta property="article:modified_time" content="2022-02-15T02:40:34.704Z">
+<meta property="article:author" content="郭超">
+<meta property="article:tag" content="数据库结构">
+<meta property="article:tag" content="RDB">
+<meta property="article:tag" content="AOF">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/1.png">
+
+
+<link rel="canonical" href="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/","path":"2022/02/15/Redis技术总结4-持久化/","title":"Redis技术总结4-持久化"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Redis技术总结4-持久化 | 大牙技术</title>
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">大牙技术</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">Chaos Guo's Personal WebSite</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu">
+        <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li>
+        <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li>
+        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li>
+        <li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-%E6%95%B0%E6%8D%AE%E5%BA%93"><span class="nav-number">1.</span> <span class="nav-text">1.  数据库</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-1-%E6%95%B0%E6%8D%AE%E5%BA%93%E7%BB%93%E6%9E%84"><span class="nav-number">1.1.</span> <span class="nav-text">1.1  数据库结构</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-2-%E6%95%B0%E6%8D%AE%E5%BA%93%E7%9A%84%E9%94%AE%E7%A9%BA%E9%97%B4"><span class="nav-number">1.2.</span> <span class="nav-text">1.2  数据库的键空间</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-3-%E8%AE%BE%E7%BD%AE%E9%94%AE%E7%9A%84%E7%94%9F%E5%AD%98%E6%97%B6%E9%97%B4%E5%92%8C%E8%BF%87%E6%9C%9F%E6%97%B6%E9%97%B4"><span class="nav-number">1.3.</span> <span class="nav-text">1.3  设置键的生存时间和过期时间</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-4-%E8%BF%87%E6%9C%9F%E9%94%AE%E5%88%A0%E9%99%A4%E7%AD%96%E7%95%A5"><span class="nav-number">1.4.</span> <span class="nav-text">1.4  过期键删除策略</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#1-5-RDB%E3%80%81AOF%E3%80%81%E5%A4%8D%E5%88%B6%E5%8A%9F%E8%83%BD%E5%AF%B9%E8%BF%87%E6%9C%9F%E9%94%AE%E7%9A%84%E5%A4%84%E7%90%86"><span class="nav-number">1.5.</span> <span class="nav-text">1.5  RDB、AOF、复制功能对过期键的处理</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-RDB%E6%8C%81%E4%B9%85%E5%8C%96"><span class="nav-number">2.</span> <span class="nav-text">2.  RDB持久化</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#2-1-RDB%E6%96%87%E4%BB%B6%E7%9A%84%E5%88%9B%E5%BB%BA%E5%92%8C%E8%BD%BD%E5%85%A5"><span class="nav-number">2.1.</span> <span class="nav-text">2.1  RDB文件的创建和载入</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-2-%E8%87%AA%E5%8A%A8%E9%97%B4%E9%9A%94%E6%80%A7%E4%BF%9D%E5%AD%98"><span class="nav-number">2.2.</span> <span class="nav-text">2.2  自动间隔性保存</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-3-%E4%BC%98%E7%BC%BA%E7%82%B9"><span class="nav-number">2.3.</span> <span class="nav-text">2.3  优缺点</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-AOF%E6%8C%81%E4%B9%85%E5%8C%96"><span class="nav-number">3.</span> <span class="nav-text">3.  AOF持久化</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#3-1-AOF%E6%8C%81%E4%B9%85%E5%8C%96%E5%8A%9F%E8%83%BD%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="nav-number">3.1.</span> <span class="nav-text">3.1  AOF持久化功能的实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-2-AOF%E6%96%87%E4%BB%B6%E7%9A%84%E8%BD%BD%E5%85%A5"><span class="nav-number">3.2.</span> <span class="nav-text">3.2  AOF文件的载入</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-3-AOF%E9%87%8D%E5%86%99"><span class="nav-number">3.3.</span> <span class="nav-text">3.3  AOF重写</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="郭超"
+      src="/images/avatar.gif">
+  <p class="site-author-name" itemprop="name">郭超</p>
+  <div class="site-description" itemprop="description">学习,分享,进步</div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">categories</span>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">16</span>
+        <span class="site-state-item-name">tags</span>
+      </div>
+  </nav>
+</div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
+    </header>
+
+    
+  <div class="back-to-top" role="button" aria-label="Back to top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="郭超">
+      <meta itemprop="description" content="学习,分享,进步">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="大牙技术">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Redis技术总结4-持久化
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2022-02-15 09:32:49 / Modified: 10:40:34" itemprop="dateCreated datePublished" datetime="2022-02-15T09:32:49+08:00">2022-02-15</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/NoSQL/" itemprop="url" rel="index"><span itemprop="name">NoSQL</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/NoSQL/Redis/" itemprop="url" rel="index"><span itemprop="name">Redis</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <h3 id="1-数据库"><a href="#1-数据库" class="headerlink" title="1.  数据库"></a>1.  数据库</h3><h4 id="1-1-数据库结构"><a href="#1-1-数据库结构" class="headerlink" title="1.1  数据库结构"></a>1.1  数据库结构</h4><p>一个Redis服务器中有多个（默认16个）数据库。这些数据库都保存在redisServer结构中，每一个数据库都是一个redisDB结构，如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/1.png" alt="img"><center><em>redisServer代码示意</em></center></p>
+<p>初始化服务器时，程序会根据dbnum属性来决定创建多少个数据库。如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/2.png" alt="img"><center><em>redisServer结构示意</em></center></p>
+<p>每个Redis客户端都有自己的目标数据库，可以用SELECT命令进行切换。在程序中，客户端的状态记录在redisClient结构中，如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/3.png" alt="img"><center><em>redisClient代码示意</em></center></p>
+<p>redisClient.db指向redisServer.db数组中的一个元素，而被指向的元素就是客户端的目标数据库。</p>
+<p>如果客户端最开始指向数据库1，如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/4.png" alt="img"><center><em>客户端指向数据库1</em></center></p>
+<p>当执行命令SELECT 2之后，客户端会指向数据库2，如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/5.png" alt="img"><center><em>客户端指向数据库2</em></center></p>
+<p>redisClient.db指针的改变就是SELECT命令实现的原理。</p>
+<h4 id="1-2-数据库的键空间"><a href="#1-2-数据库的键空间" class="headerlink" title="1.2  数据库的键空间"></a>1.2  数据库的键空间</h4><p>每个redisDb结构中，会有一个dict字典，保存了数据库的所有键值对，这个字段被称为键空间。</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/6.png" alt="img"><center><em>redisDb代码示意</em></center></p>
+<p>键空间就是用户所能感知到的数据库：</p>
+<p>键空间中的键就是数据库中的键，每个键是一个字符串对象。</p>
+<p>键空间中的值就是数据库中的值，每个值可以是5种Redis对象中的一种。</p>
+<p>例如一个包含了列表键alphabet，哈希键book，字符串对象message的数据库结构，如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/7.png" alt="img"><center><em>redisDb结构示意</em></center></p>
+<p>所有针对数据库的操作，比如对键的增删改查，其实都是在对键空间字典进行操作。</p>
+<p>不光是增删改查，其他的命令，比如FLUSHDB命令，其实是删除键空间所有键值对；比如DBSIZE命令，是返回键空间中键值对数量；RANDOMKEY命令，是随机返回键空间中某一个键。</p>
+<p>当读写数据库的键空间时，服务器还会执行一些额外的维护操作：</p>
+<p><strong>1)</strong>    在读取一个键后（读操作和写操作都要对键进行读取），服务器会根据键是否存在，来更新服务器的键空间命中次数和键空间不命中次数。这两个值可以在INFO STATS命令中查看。</p>
+<p><strong>2)</strong>    在读取一个键后，服务器会更新键的LRU时间，这个值用于计算键的空转时间，使用OBJECT IDLETIME命令查看。</p>
+<p><strong>3)</strong>    在读取一个键时，如果发现键已经过期，服务器会删除这个键。</p>
+<p><strong>4)</strong>    当修改一个键后，服务器会将该键标记为脏dirty，让使用WATCH命令监视此键的客户端知道该键已经被修改。</p>
+<p><strong>5)</strong>    服务器每修改一个键，都会对脏键计数器+1，这个计数器会触发服务器的持久化和复制操作。</p>
+<p><strong>6)</strong>    对键进行修改之后，如果服务器开启了数据库通知功能，会按照配置发送相应的数据库通知。</p>
+<h4 id="1-3-设置键的生存时间和过期时间"><a href="#1-3-设置键的生存时间和过期时间" class="headerlink" title="1.3  设置键的生存时间和过期时间"></a>1.3  设置键的生存时间和过期时间</h4><p>有4个命令来设置键的生存时间和过期时间：</p>
+<p><strong>1)    EXPIRE</strong></p>
+<p>以秒为单位，设置某个键的生存时间，指定秒后，键过期。</p>
+<p><strong>2)    PEXPIRE</strong></p>
+<p>以毫秒为单位，设置某个键的生存时间。</p>
+<p><strong>3)    EXPIREAT</strong></p>
+<p>以秒为精度，设置某个键的过期时间，UNIX秒数时间戳。</p>
+<p><strong>4)    PEXPIREAT</strong></p>
+<p>以毫秒为精度，设置某个键的过期时间，UNIX毫秒数时间戳。</p>
+<p>实际上，EXPIRE,PEXPIRE,EXPIREAT命令，都是使用PEXPIREAT命令来实现的：即无论客户端执行哪一个命令，最终都是执行PEXPIREAT命令。</p>
+<p>在redisDb结构中，字典expires保存了数据库中所有键的过期时间，我们称为过期字典，如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/8.png" alt="img"><center><em>redisDb代码示意</em></center></p>
+<p>过期字典的键是一个指针，指向键空间中的某个键对象；</p>
+<p>过期字典的值是一个long long型整数，保存着键指向的数据库键的过期时间：毫秒级精度的UNIX时间戳。</p>
+<p>如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/9.png" alt="img"><center><em>redisDb结构示意</em></center></p>
+<p>移除过期时间可以用PERSIST命令。PERSIST命令时PEXPIREAT命令的反操作，将键从过期字典中移除。</p>
+<p>获取剩余时间可以用TTL命令（返回秒）和PTTL命令（返回毫秒）。</p>
+<p>判断键是否过期步骤如下：</p>
+<p><strong>1)</strong>    检查给定键是否在过期字典中，如果存在，那么获取键的过期时间；</p>
+<p><strong>2)</strong>    检查当前UNIX时间戳是否大于键的过期时间，如果是那么键已经过期。如果不是，那么嗨未过期。</p>
+<p>虽然用TTL和PTTL命令也可以判断键是否过期，但是访问字典要比执行一个命令稍微快一点。</p>
+<h4 id="1-4-过期键删除策略"><a href="#1-4-过期键删除策略" class="headerlink" title="1.4  过期键删除策略"></a>1.4  过期键删除策略</h4><p>过期键删除有3种策略：</p>
+<p><strong>1)</strong>    定时删除。</p>
+<p>设置过期键的时候，同时生成一个定时器。当定时器到时之后，对键进行删除操作。</p>
+<p>优点是对内存最友好，缺点是对CPU最不友好。</p>
+<p><strong>2)</strong>    惰性删除</p>
+<p>每次从键空间中读取键的时候，都检查是否过期，如果过期就删除。没过期正常操作。</p>
+<p>优点是对CPU最友好，缺点是对内存不友好。</p>
+<p><strong>3)</strong>    定期删除</p>
+<p>每隔一段时间，程序对数据库进行一次检查，删除过期键。每次检查多少数据库、多少键、删除多少键，由算法决定。</p>
+<p>优点是折中方案，兼顾CPU和内存。缺点是难以确定删除操作的算法策略。</p>
+<p>Redis采用惰性删除和定时删除两种策略。</p>
+<p><strong>1)</strong>    惰性删除就是由expireIfNeeded函数实现。所有读写数据库的Redis命令，在执行之前都会调用expireIfNeeded函数对输入键进行检查。</p>
+<p><strong>2)</strong>    定时删除由activeExpireCycle函数实现。Redis服务器有一个周期性操作函数serverCron。每当serverCron函数执行时，activeExpireCycle函数会被调用。步骤如下：</p>
+<p>a)    从一定数量的数据库中随机选取一定数量的键，删除其中过期键。</p>
+<p>b)   使用current_db记录当前activeExpireCycle函数执行进度（数据库编号），下次执行从下一个数据库开始。</p>
+<p>c)    所有数据检查完成后，current_db置0。之后开始新一轮。</p>
+<h4 id="1-5-RDB、AOF、复制功能对过期键的处理"><a href="#1-5-RDB、AOF、复制功能对过期键的处理" class="headerlink" title="1.5  RDB、AOF、复制功能对过期键的处理"></a>1.5  RDB、AOF、复制功能对过期键的处理</h4><p>对RDB文件来说，过期键不会对服务器产生影响。因为：</p>
+<p><strong>1)</strong>    生成RDB文件</p>
+<p>当执行SAVE命令或者BGSAVE命令创建RDB文件时，程序会对数据库中的键进行检查，过期键不会生成在RDB文件中。</p>
+<p><strong>2)</strong>    载入RDB文件</p>
+<p>如果服务器以主服务器模式运行，载入时程序会对过期键进行忽略。</p>
+<p>如果服务器以从服务器模式运行，所有键会全部载入。但是主从进行数据同步时，从服务器会按照主服务器数据进行更新，所以过期键也不会对服务器产生影响。</p>
+<p>对AOF文件来说，略复杂：</p>
+<p><strong>1)</strong>    写入AOF文件</p>
+<p>如果某个键已经过期，但是还未被删除策略删除。那么对AOF文件，不会有影响。</p>
+<p>当过期键被删除的时候，程序会在删除该键之后，向AOF文件追加一条DEL命令。</p>
+<p><strong>2)</strong>    AOF重写</p>
+<p>在执行AOF重写命令时，会忽略已过期的键，不会保存在重写之后的AOF文件中。</p>
+<p>当服务器运行在复制模式下时，过期键删除操作由主服务器控制：</p>
+<p><strong>1)</strong>    主服务器删除一个过期键后，向所有从服务器发送DEL命令，告诉从服务器对过期键进行删除。</p>
+<p><strong>2)</strong>    从服务器执行读命令时，不会判断键是否过期，即使过期也按未过期处理。</p>
+<p><strong>3)</strong>    从服务器只有接收到DEL命令后，才会对键进行删除。</p>
+<h3 id="2-RDB持久化"><a href="#2-RDB持久化" class="headerlink" title="2.  RDB持久化"></a>2.  RDB持久化</h3><p>RDB（Redis DataBase）持久化功能，相当于提供一个数据库的快照，保存在磁盘，避免数据丢失。RDB持久化功能生成的RDB文件是一个经过压缩的二进制文件。</p>
+<h4 id="2-1-RDB文件的创建和载入"><a href="#2-1-RDB文件的创建和载入" class="headerlink" title="2.1  RDB文件的创建和载入"></a>2.1  RDB文件的创建和载入</h4><p>有2个Redis命令可以用于生成RDB文件，SAVE和BGSAVE。</p>
+<p><strong>1)    SAVE</strong></p>
+<p>阻塞服务器进程，直到RDB文件创建完毕为止。在服务器阻塞期间，不能处理任何命令。待RDB文件生成之后，客户端发送的命令才会被处理。</p>
+<p><strong>2)    BGSAVE</strong></p>
+<p>fork一个子进程，由子进程负责创建RDB文件，服务器进程（父进程）继续处理命令。</p>
+<p>但是要注意的是，对SAVE、BGSAVE、BGREWRITEAOF三个命令的处理会有所不同。</p>
+<p>a)    SAVE和BGSAVE命令会被服务器拒绝。</p>
+<p>b)   如果BGSAVE正在执行，那么BGREWRITEAOF会被延迟到BGSAVE执行完毕后执行。</p>
+<p>c)    如果BGREWRITEAOF命令正在执行，那么BGSAVE命令会被拒绝。</p>
+<p>和使用命令创建RDB文件不同的是，Redis并没有载入RDB文件的命令。载入RDB文件是在Redis启动时自动执行的。</p>
+<p>服务器在载入RDB文件期间，会一直处于阻塞状态，直到载入工作完成为止。</p>
+<h4 id="2-2-自动间隔性保存"><a href="#2-2-自动间隔性保存" class="headerlink" title="2.2  自动间隔性保存"></a>2.2  自动间隔性保存</h4><p>Redis允许用户通过配置项，设置服务器执行BGSAVE命令的频率（条件）。</p>
+<p>默认：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">save 900 1 //900s内做了1次修改</span><br><span class="line"></span><br><span class="line">save 300 10 //300秒内做了10次修改</span><br><span class="line"></span><br><span class="line">save 60 10000 //60秒内做了10000次修改</span><br></pre></td></tr></table></figure>
+
+<p>满足任何一个条件，服务器就会执行BGSAVE命令。</p>
+<p>保存条件在redisServer中的结构如下：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/10.png" alt="img"><center><em>redisServer代码示意</em></center></p>
+<p>saveparams是一个数组，每个元素是一个saveparam结构，这个结构保存着save选项设置的保存条件：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/11.png" alt="img"><center><em>saveparam代码示意</em></center></p>
+<p>保存着saveparams的redisServer结构如下：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/12.png" alt="img"><center><em>redisServer结构示意</em></center></p>
+<p>除了saveparams数组外，服务器状态还同时维持着一个dirty计数器和一个lastsave属性。</p>
+<p>\1)    dirty计数器记录了上一次执行SAVE或者BGSAVE命令后，服务器对数据库状态进行了多少次修改。</p>
+<p>\2)    lastsave属性是一个UNIX时间戳，记录了上一次成功执行SAVE或者BGSAVE命令的时间。</p>
+<p>如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/13.png" alt="img"><center><em>redisServer代码示意图</em></center></p>
+<p>Redis服务器周期性操作函数serverCron默认每个100ms执行一次。该函数的其中一个工作就是检查save选项所设置的条件是否已经满足（遍历saveparams数组，只要一个条件满足即可），如果满足则执行BGSAVE命令。</p>
+<p>除了满足save条件，还有3种触发RDB持久化操作的场景：</p>
+<p><strong>1)</strong>    从节点执行全量复制操作时，主节点自动执行BGSAVE命令生成RDB文件传输给从节点。</p>
+<p><strong>2)</strong>    执行DEBUG RELOAD命令重新加载Redis时，也会触发SAVE。</p>
+<p><strong>3)</strong>    执行SHUTDOWN命令时，如果没有开启AOF持久化，则自动执行BGSAVE。</p>
+<h4 id="2-3-优缺点"><a href="#2-3-优缺点" class="headerlink" title="2.3  优缺点"></a>2.3  优缺点</h4><p>RDB文件是一个紧凑压缩（如果开启了RDB压缩设置）的二进制文件，代表Redis在某个时间点的快照。非常适合用于备份、全量复制等场景。加载RDB文件恢复数据的速度也远快于AOF文件。</p>
+<p>但RDB方式数据没有办法做到实时持久化（或者秒级持久化），因为BGSAVE命令需要fork子进程，属于重量级操作，耗费资源高。RDB文件也会有版本兼容性问题。</p>
+<h3 id="3-AOF持久化"><a href="#3-AOF持久化" class="headerlink" title="3.  AOF持久化"></a>3.  AOF持久化</h3><p>AOF(Append Only File)持久化功能，是Redis提供的另一个持久化功能。</p>
+<p>假设有3个命令依次执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">SET msg “hello”</span><br><span class="line"></span><br><span class="line">SADD fruits “apple” “banana” “cherry”</span><br><span class="line"></span><br><span class="line">RPUSH numbers 128 231 456</span><br></pre></td></tr></table></figure>
+
+<p>RDB持久化保存数据库的方式是将msg、fruits、numbers三个键值存储在RDB文件中，而AOF持久化的方式是保存3个命令到AOF文件中。</p>
+<p>如果服务器开启了AOF持久化功能，那么会优先使用AOF进行数据库状态的还原。只有在AOF持久化功能处于关闭状态时，服务器才会使用RDB文件来还原数据库。</p>
+<h4 id="3-1-AOF持久化功能的实现"><a href="#3-1-AOF持久化功能的实现" class="headerlink" title="3.1  AOF持久化功能的实现"></a>3.1  AOF持久化功能的实现</h4><p>AOF持久化功能可以分为**命令追加(append)、文件写入、文件同步(sync)**三步。</p>
+<p>当AOF持久化功能处于打开状态时，服务器在执行完一个写命令后，会按照协议格式将执行的命令追加到服务器状态的aof_buf缓冲区末尾：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%934-%E6%8C%81%E4%B9%85%E5%8C%96/14.png" alt="img"><center><em>redisServer代码示意</em></center></p>
+<p>Redis的服务器进程是一个<strong>事件循环</strong>。这个循环包含两类事件：</p>
+<p><strong>1)    文件事件</strong></p>
+<p>负责接收客户端的命令，以及向客户端发送命令回复。</p>
+<p><strong>2)    时间事件</strong></p>
+<p>负责执行像serverCron这样需要定时运行的函数。</p>
+<p>服务器在每结束一个事件循环之前，都会调用flushAppendOnlyFile方法，考虑是否要将aof_buf缓冲区的内容<strong>写入和同步</strong>到AOF文件里。</p>
+<p>注意：写入和同步是两个操作。</p>
+<p>flushAppendOnlyFile函数的行为由服务器配置的appendfsync选项的值确定，如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th>appendfsync</th>
+<th>flushAppendOnlyFile函数行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>always</td>
+<td>将aof_buf缓冲区内所有内容写入并同步到AOF文件</td>
+</tr>
+<tr>
+<td>everysec（默认）</td>
+<td>将aof_buf缓冲区内所有内容写入到AOF文件，如果上次同步AOF时间距现在超过1秒钟，那么会再次同步，这个同步操作由一个线程专门负责执行</td>
+</tr>
+<tr>
+<td>no</td>
+<td>将aof_buf缓冲区内所有内容写入到AOF文件，但不对AOF文件进行同步，何时同步由操作系统指定。</td>
+</tr>
+</tbody></table>
+<p><strong>关于文件的写入和同步：</strong></p>
+<p>为了提高文件的写入效率，现代操作系统中，当用户调用write函数，操作系统通常会将写入数据暂时保存在一个内存缓冲区中，等到缓冲区的空间被填满，或者超过了指定的时限之后，才真正的将缓冲区中的数据写入到磁盘中。</p>
+<p>虽然提高了效率，但是也带来了安全问题，加入计算机宕机，那么保存在内存缓冲区中的尚未同步到磁盘中的数据将会丢失。</p>
+<p>所以，操作系统提供了fsync和fdatasync两个同步函数，他们可以强制让操作系统立刻将缓冲区中的数据写入到磁盘中，从而确保写入数据的安全性。</p>
+<p><strong>关于三种方式的分析：</strong></p>
+<p><strong>1)    always</strong></p>
+<p>服务器在每个事件循环结束，都会进行写入和同步操作。所以效率是最慢的，但也是最安全的。</p>
+<p><strong>2)    everysec</strong></p>
+<p>服务器在每个事件循环结束，都会进行写入操作，同时每隔一秒进行同步操作。所以效率足够快，而且最多丢失1s的数据。</p>
+<p><strong>3)    no</strong></p>
+<p>服务器在每个事件循环结束，都会进行写入操作，无需程序执行同步操作。所以效率是最快的，但是最不安全。</p>
+<h4 id="3-2-AOF文件的载入"><a href="#3-2-AOF文件的载入" class="headerlink" title="3.2  AOF文件的载入"></a>3.2  AOF文件的载入</h4><p>Redis读取AOF文件的步骤如下：</p>
+<p><strong>1)</strong>    创建一个不带网络连接的伪客户端。</p>
+<p>因为Redis的命令只能在客户端中执行，所以服务器使用了一个没有网络连接的伪客户端，执行命令的效果和带网络连接的真实客户端效果是完全一样的。</p>
+<p><strong>2)</strong>    从AOF文件中分析并读取一条写命令；</p>
+<p><strong>3)</strong>    使用伪客户端执行该命令。</p>
+<p><strong>4)</strong>    重复执行2和3，直到AOF文件中的所有写命令都被处理完毕。</p>
+<h4 id="3-3-AOF重写"><a href="#3-3-AOF重写" class="headerlink" title="3.3  AOF重写"></a>3.3  AOF重写</h4><p>随着服务器运行时间增加，AOF文件中的数据也会越来越多。为了解决AOF文件体积膨胀的问题，Redis提供了AOF文件重写(rewrite)功能。</p>
+<p>AOF重写过程可以通过手动触发（直接调用BGREWRITEAOF命令）和自动触发（根据AOF重写时文件最小体积auto-aof-rewrite-min-size和当前AOF空间和上次重写后AOF空间比值auto-aof-rewrite-percentage自动重写）。</p>
+<p>虽然这个功能被叫做AOF文件重写，但是他并不需要对现有的AOF文件进行任何读取、分析、写入操作，这个功能是通过读取服务器当前数据库的状态来实现的。</p>
+<p>比如之前服务器对一个键执行了6次写命令，那么保存在AOF文件中，关于这个键的命令会有6条。当要重写时，不会依次分析6条语句，而是直接读取当前数据库该键的值，然后用一条写命令记录键值对，来代替之前的多条语句。这就是AOF重写功能的实现原理。</p>
+<p>因为AOF文件重写可能会涉及到大量的命令写入和同步文件的操作，如果直接调用会造成服务器进程阻塞。所以Redis会单独fork一个子进程来执行重写操作。</p>
+<p>但是如果在子进程重写期间，如果有命令到来，会对数据库状态造成不一致的现象。 为了解决这个问题，Redis服务器设置了一个<strong>AOF重写缓冲区</strong>，这个缓冲区会在服务器创建子进程之后开始使用，当Redis服务器执行完一个写命令后，他会将写命令同时写入AOF缓冲区和AOF重写缓冲区。</p>
+<p>当子进程完成AOF重写工作后，他会向父进程发送一个信号，父进程收到信号会调用一个函数，执行以下操作：</p>
+<p><strong>1)</strong>    将AOF重写缓冲区中的所有内容写入到新的AOF文件中。保证AOF文件所保存的数据库状态跟服务器当前状态一致。</p>
+<p><strong>2)</strong>    对新的AOF文件改名，覆盖现有AOF文件，完成新旧两个AOF文件的替换。</p>
+<p>具体过程如下表：</p>
+<table>
+<thead>
+<tr>
+<th>时间</th>
+<th>父进程</th>
+<th>子进程</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>T1</td>
+<td>执行命令SET k1 v1</td>
+<td></td>
+</tr>
+<tr>
+<td>T2</td>
+<td>执行命令SET k1 v2</td>
+<td></td>
+</tr>
+<tr>
+<td>T3</td>
+<td>执行命令SET k1 v3</td>
+<td></td>
+</tr>
+<tr>
+<td>T4</td>
+<td>创建子进程，执行AOF文件重写</td>
+<td>开始AOF文件重写</td>
+</tr>
+<tr>
+<td>T5</td>
+<td>执行命令SET k2 123</td>
+<td>执行重写操作</td>
+</tr>
+<tr>
+<td>T6</td>
+<td>执行命令SET k3 456</td>
+<td>执行重写操作</td>
+</tr>
+<tr>
+<td>T7</td>
+<td>执行命令SET k4 789</td>
+<td>完成AOF重写，向父进程发送信号</td>
+</tr>
+<tr>
+<td>T8</td>
+<td>收到信号，将T5T6T7三个命令追加到新的AOF文件末尾</td>
+<td></td>
+</tr>
+<tr>
+<td>T9</td>
+<td>用新的AOF文件替换旧AOF文件</td>
+<td></td>
+</tr>
+</tbody></table>
+<p>以上就是BGREWRITEAOF命令的实现原理。</p>
+<p>在Redis启动时，持久化文件加载流程如下：</p>
+<p><strong>1)</strong>    AOF持久化开启并且存在AOF时，优先加载AOF文件；</p>
+<p><strong>2)</strong>    AOF关闭时，加载RDB文件；</p>
+<p><strong>3)</strong>    加载AOF或者RDB文件成功后，Redis启动成功；</p>
+<p><strong>4)</strong>    AOF或者RDB文件存在错误时，Redis启动失败并打印错误信息。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93%E7%BB%93%E6%9E%84/" rel="tag"># 数据库结构</a>
+              <a href="/tags/RDB/" rel="tag"># RDB</a>
+              <a href="/tags/AOF/" rel="tag"># AOF</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2022/02/14/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%933-%E5%AF%B9%E8%B1%A1/" rel="prev" title="Redis技术总结3-对象">
+                  <i class="fa fa-chevron-left"></i> Redis技术总结3-对象
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">郭超</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/muse/" rel="noopener" target="_blank">NexT.Muse</a>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/schemes/muse.js"></script><script src="/js/next-boot.js"></script>
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+</body>
+</html>
