@@ -134,7 +134,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-count">9</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -172,6 +172,199 @@
 
 
     <div class="main-inner index posts-expand">
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://basonson.github.io/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="郭超">
+      <meta itemprop="description" content="学习,分享,进步">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="大牙技术">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/" class="post-title-link" itemprop="url">Redis技术总结5-服务器与客户端</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2022-02-15 11:04:34 / Modified: 11:29:14" itemprop="dateCreated datePublished" datetime="2022-02-15T11:04:34+08:00">2022-02-15</time>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h3 id="1-客户端"><a href="#1-客户端" class="headerlink" title="1.  客户端"></a>1.  客户端</h3><p>Redis服务器是一个典型的一对多服务器程序：一个服务器可以与多个客户端建立网络连接，每个客户端想服务器发送命令请求，而服务器则接收并处理客户端发送的命令请求，向客户端返回命令回复。</p>
+<p>Redis服务器状态redisServer结构中的clients是一个链表，保存了所有与服务器连接的客户端的状态结构，对客户端进行批量操作，或者查找某个指定的客户端，都可以通过遍历clients链表完成。如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/1.png" alt="img"><center><em>redisServer结构示意</em></center></p>
+<p>客户端包含的属性分为两类：一类是通用属性，例如名字、标识等等；另一类是与特定功能相关的属性，比如操作数据库需要的db属性，执行事务需要用到的mstate属性等等。客户端信息可以通过CLIENT LIST（列出与Redis服务器相连的所有客户端链接信息）列出。客户端redisClient代码如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/2.png" alt="img"><center><em>redisClient代码示意</em></center></p>
+<p>客户端基本属性如下：</p>
+<h4 id="1-socket描述符：fd"><a href="#1-socket描述符：fd" class="headerlink" title="1)    socket描述符：fd"></a>1)    socket描述符：fd</h4><p>伪客户端（什么是伪客户端？）的fd值是-1，普通客户端的fd值是大于-1的整数。</p>
+<h4 id="2-名字：name"><a href="#2-名字：name" class="headerlink" title="2)    名字：name"></a>2)    名字：name</h4><p>默认状态下没有名字，使用CLIENT SETNAME命令可以为客户端指定名字。</p>
+<h4 id="3-标志：flags"><a href="#3-标志：flags" class="headerlink" title="3)    标志：flags"></a>3)    标志：flags</h4><p>标志记录了客户端目前所处的状态，例如主服务器(REDIS_MASTER)、从服务器(REDIS_SLAVE)、阻塞(REDIS_BLOCKED)、事务(REDIS_MULTI)等等。</p>
+<h4 id="4-输入缓冲区：querybuf"><a href="#4-输入缓冲区：querybuf" class="headerlink" title="4)    输入缓冲区：querybuf"></a>4)    输入缓冲区：querybuf</h4><p>输入缓冲区用于保存客户端发送的命令请求。输入缓冲区最大不能超过1G，否则服务器会立刻关闭这个客户端连接。</p>
+<p>输入缓冲区过大的原因就是因为Redis的处理速度跟不上输入缓冲区的输入速度。例如输入命令包含了大量的长度很大的键值，或者Redis发生阻塞不能处理命令。</p>
+<p>监控缓冲区异常的方法有2种：</p>
+<p>A.   通过定期执行CLIENT LIST命令，寻找qbuf异常的链接并分析，找出可能出问题的客户端（可以使用CLIENT KILL ip:port命令关闭）；</p>
+<p>B.    通过INFO命令的info clients模块，找到最大的输入缓冲区client_biggest_input_buf，设置为10M（超过10M即报警）。</p>
+<h4 id="5-命令与命令参数：argv-argc"><a href="#5-命令与命令参数：argv-argc" class="headerlink" title="5)    命令与命令参数：argv,argc"></a>5)    命令与命令参数：argv,argc</h4><p>服务器将客户端命令存储在输入缓冲区后，会对命令内容进行解析，得出命令参数以及参数的个数，保存在argv和argc属性。如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/3.png" alt="img"><center><em>redisClient结构示意图</em></center></p>
+<h4 id="6-命令的实现函数"><a href="#6-命令的实现函数" class="headerlink" title="6)    命令的实现函数"></a>6)    命令的实现函数</h4><p>服务器会根据argv[0]的值，在命令表中查询命令所对应的命令实现函数。命令表是一个字典，字典的键是SDS，值是redisCommand结构，这个结构保存了命令的实现函数、标志、给定参数个数、总执行次数、总消耗时长等。</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/4.png" alt="img"><center><em>命令表</em></center></p>
+<p>程序在命令表中找到对应的redisCommand结构时，会将redisClient中的cmd指向这个结构。之后服务器就可以根据cmd,argv,argc调用命令实现函数，执行命令。</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/5.png" alt="img"><center><em>查找命令并设置cmd属性</em></center></p>
+<h4 id="7-输出缓冲区"><a href="#7-输出缓冲区" class="headerlink" title="7)    输出缓冲区"></a>7)    输出缓冲区</h4><p>执行命令之后的回复会被保存在redisClient的输出缓冲区中，每个客户端有2个输出缓冲区，一个大小固定，一个大小可变。</p>
+<p><strong>a)</strong>    固定大小的缓冲区用于保存长度较小的回复，比如OK，简短的字符串，数值，错误恢复等等。如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/6.png" alt="img"><center><em>固定大小缓冲区</em></center></p>
+<p>buf是直接数组，默认16*1024。bufpos是目前已用数量。</p>
+<p><strong>b)</strong>   可变大小的缓冲区用于保存长度较大的回复，比如一个长字符串，很多项的列表，很多元素的集合等等。</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/7.png" alt="img"><center><em>可变大小缓冲区</em></center></p>
+<p>reply是一个包含多个字符串对象的链表。</p>
+<p>输出缓冲区是有一定限制的，如果输出缓冲区大小超过了服务器设置的硬性限制，那么客户端会立刻关闭；另外，如果客户端在一定时间内，一直超过服务器设置的软性限制，客户端也会关闭。</p>
+<h4 id="8-身份验证"><a href="#8-身份验证" class="headerlink" title="8)    身份验证"></a>8)    身份验证</h4><p>authenticated属性用于记录客户端是否通过了身份验证。当值为0时，除了AUTH命令外，所有其他命令都会被服务器拒绝执行。但这仅仅在服务器启用了身份验证功能时才会发生，如果服务器未启用身份验证，无论何值都不会拒绝客户端的命令请求。</p>
+<h3 id="2-服务器"><a href="#2-服务器" class="headerlink" title="2.  服务器"></a>2.  服务器</h3><h4 id="1-命令请求执行的过程"><a href="#1-命令请求执行的过程" class="headerlink" title="1)  命令请求执行的过程"></a>1)  命令请求执行的过程</h4><p>如果客户端发送SET KEY VALUE到获得回复OK期间，客户端和服务器共需要执行以下操作：</p>
+<p><strong>1)</strong>    客户端向服务器发送命令请求SET KEY VALUE。</p>
+<p><strong>2)</strong>    服务器接收并处理客户端发来的命令请求，在数据库进行设置操作，并产生命令回复OK。</p>
+<p><strong>3)</strong>    服务器将命令回复OK发送给客户端。</p>
+<p><strong>4)</strong>    客户端接收命令回复OK，并将这个回复打印给用户观看。</p>
+<p>2.1.1    发送命令请求</p>
+<p>用户在客户端输入一个命令，客户端将这个命令请求转换成协议格式，然后通过socket将命令请求发送给服务器。</p>
+<p>2.1.2    读取命令请求</p>
+<p>服务器读取命令请求，保存在redisClient中的输入缓冲区中。然后对其进行分析，解析出argv和argc。调用命令执行器，执行客户端指定的命令。</p>
+<p>2.1.3    命令执行器(1)：查找命令实现</p>
+<p>命令执行器根据argv[0]参数(SET,GET,等等)，在命令表当中查询指定的命令，并将找到的命令保存到redisClient的cmd属性中。</p>
+<p>2.1.4    命令执行器(2)：执行预备操作</p>
+<p>截止目前，服务器已经将所需命令实现函数（cmd），参数（argv），参数个数（argc）都收集齐了。但是在真正执行命令之前，还需要一些预备操作，比如：检查cmd是否指向NULL，检查参数个数是否正确，检查是否通过身份验证，检查内存占用情况等等。</p>
+<p>2.1.5    命令执行器(3)：调用实现函数</p>
+<p>当服务器准备好，决定执行命令，只需要执行以下语句：</p>
+<p>client-&gt;cmd-&gt;proc(client);</p>
+<p>语句产生的回复被保存在客户端状态的输出缓冲区里面（buf属性和reply属性），之后实现函数还会为客户端的socket关联命令回复处理器，这个处理器负责将命令回复返回给客户端。</p>
+<p>2.1.6    命令执行器(4)：调用实现函数</p>
+<p><strong>1)</strong>    如果开启慢查询，检查刚刚执行的命令是否需要添加到慢查询日志中。</p>
+<p><strong>2)</strong>    更新cmd中的milliseconds属性，并将calls属性加1。</p>
+<p><strong>3)</strong>    如果开启AOF，命令写入到AOF缓冲区中。</p>
+<p><strong>4)</strong>    如果有复制，命令传递给从服务器。</p>
+<h4 id="2-serverCron函数"><a href="#2-serverCron函数" class="headerlink" title="2)  serverCron函数"></a>2)  serverCron函数</h4><p>serverCron函数默认每隔100ms执行一次。这个函数负责管理服务器的资源，并保持服务器自身的良好运转。</p>
+<p>2.2.1    更新服务器缓存</p>
+<p>Redis服务器中很多功能需要获取系统当前时间，但是获取系统时间会执行系统调用。为了减少系统调用次数，redisServer中的unixtime属性和mstime属性被当做当前时间的缓存。</p>
+<p>serverCron函数每次运行会更新这两个属性。</p>
+<p>注意：</p>
+<p>服务器只会在打印日志、更新LRU时钟、决定是否执行持久化任务、计算服务器上线时间等这类对时间精度要求不高的功能上使用缓存。</p>
+<p>在为键设置过期时间、添加慢查询日志这种需要高精度时间的功能来说，服务器还是会进行系统调用，获取精准时间。</p>
+<p>2.2.2    更新LRU时钟</p>
+<p>redisServer中保存着LRU时钟：unsigned属性的 lruclock。这个属性与unixtime和mstime一样，都是服务器时间缓存的一种。</p>
+<p>每个Redis对象都有一个lru属性：unsigned lru。这个lru属性保存了对象最后一次被访问的时间。</p>
+<p>计算对象的空转时间：用服务器的lruclock-对象的lru</p>
+<p>2.2.3    更新每秒执行命令次数</p>
+<p>serverCron中的trackOperationsPerSecond函数以抽样计算的方式，估算并记录服务器在最近一秒钟内处理的命令数量。这个值可以通过INFO STATUS命令查看。</p>
+<p>2.2.4    更新服务器内存峰值纪录</p>
+<p>serverCron函数运行时会更新服务器内存峰值，即最大使用内存值。</p>
+<p>2.2.5    管理客户端资源</p>
+<p>serverCron中的clientsCron函数，会对连接超时、输入输出缓冲区过大的客户端进行释放。</p>
+<p>2.2.6    执行被延迟的BGREWRITEAOF</p>
+<p>BGSAVE执行期间，BGREWRITEAOF会被延迟。serverCron函数会处理被延迟的BGREWRITEAOF命令。</p>
+<p>2.2.7    检查持久化操作的状态</p>
+<p>redisServer中使用两个属性值记录BGSAVE和BGREWRITEAOF是否正在执行。</p>
+<p>2.2.8    将AOF缓冲区内容写入AOF文件</p>
+<p>serverCron负责将缓冲区内的内容写入AOF文件。</p>
+<h4 id="3-初始化服务器"><a href="#3-初始化服务器" class="headerlink" title="3)  初始化服务器"></a>3)  初始化服务器</h4><p>初始化服务器的第一步是创建redisServer结构的变量实例作为服务器状态，同时为各个属性值设置默认值，例如设置运行ID，运行频率、配置文件路径、运行架构、默认端口号、持久化条件、LRU时钟、创建命令表。</p>
+<p>启动服务器时，可以通过默认配置文件、指定配置文件、指定配置参数三种方式来进行。</p>
+<p>在正确载入配置选项后，服务器会初始化数据结构，比如redisClients，redisDb等等，并设置初始值。</p>
+<p>初始化数据结构之后，服务器需要载入AOF文件或RDB文件，还原数据库状态。</p>
+<p>最后一步，服务器打印出如下日志：</p>
+<p>The server is now ready to accept connections on port 6379</p>
+<p>并开始执行服务器的事件循环(loop)。</p>
+<h3 id="3-客户端与服务器端通信协议"><a href="#3-客户端与服务器端通信协议" class="headerlink" title="3.  客户端与服务器端通信协议"></a>3.  客户端与服务器端通信协议</h3><p>主流编程语言都会支持Redis，例如Java，C#，PHP，Python，Node.js，C，C++等。一是因为Redis非常流行，非常高效；二是因为Redis客户端与服务器端的通信是基于TCP的；三是因为Redis制定了RESP（Redis Serialization Protocal，Redis序列化协议）实现客户端与服务端的正常交互。</p>
+<h4 id="1-发送命令格式"><a href="#1-发送命令格式" class="headerlink" title="1)  发送命令格式"></a>1)  发送命令格式</h4><p>RESP标准发送命令格式如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">*[参数数量]\r\n</span><br><span class="line"></span><br><span class="line">$[参数1的字节数量]\r\n</span><br><span class="line"></span><br><span class="line">[参数1]\r\n</span><br><span class="line"></span><br><span class="line">…</span><br><span class="line"></span><br><span class="line">$[参数N的字节数量]\r\n</span><br><span class="line"></span><br><span class="line">[参数N]\r\n</span><br></pre></td></tr></table></figure>
+
+
+<p>例如执行命令SET hello world，客户端会将其封装成如下格式：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">*3</span><br><span class="line"></span><br><span class="line"><span class="variable">$3</span></span><br><span class="line"></span><br><span class="line">SET</span><br><span class="line"></span><br><span class="line"><span class="variable">$5</span></span><br><span class="line"></span><br><span class="line">hello</span><br><span class="line"></span><br><span class="line"><span class="variable">$5</span></span><br><span class="line"></span><br><span class="line">world</span><br></pre></td></tr></table></figure>
+
+
+<p>要注意的是，上面是格式化之后的结果，真正内容如下格式：</p>
+<p>*3\r\n$3\r\nSET\r\n$5\r\nhello\r\n$5\r\nworld\r\n</p>
+<h4 id="2-返回结果格式"><a href="#2-返回结果格式" class="headerlink" title="2)  返回结果格式"></a>2)  返回结果格式</h4><p>RESP标准返回结果类型有5种：</p>
+<p><strong>1)</strong>    状态恢复：第一个字节为”+”。</p>
+<p><strong>2)</strong>    错误恢复：第一个字节为”-”。</p>
+<p><strong>3)</strong>    整数回复：第一个字节为”:”。</p>
+<p><strong>4)</strong>    字符串回复：第一个字节为”$”。</p>
+<p><strong>5)</strong>    多条字符串回复：第一个字节为”*”。</p>
+<p>为什么客户端看到的结果没有这些符号？因为redis-cli本身就是按照RESP进行解析过了。对这些首字节符号进行了删除。</p>
+<p>真实结果如下图：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">SET hello world</span><br><span class="line"></span><br><span class="line">+OK</span><br><span class="line"></span><br><span class="line"> </span><br><span class="line"></span><br><span class="line">SETFALSJFJFJFJFJ</span><br><span class="line"></span><br><span class="line">+ERR unknown <span class="built_in">command</span> ‘SETFALSJFJFJFJFJ’</span><br><span class="line"></span><br><span class="line"> </span><br><span class="line"></span><br><span class="line">INCR count</span><br><span class="line"></span><br><span class="line">:1</span><br><span class="line"></span><br><span class="line"> </span><br><span class="line"></span><br><span class="line">GET hello</span><br><span class="line"></span><br><span class="line"><span class="variable">$5</span></span><br><span class="line"></span><br><span class="line">world</span><br><span class="line"></span><br><span class="line">其实此处结果为<span class="variable">$5</span>\r\nworld\r\n</span><br><span class="line"></span><br><span class="line"> </span><br><span class="line"></span><br><span class="line">MSET java jedis python redis-py</span><br><span class="line"></span><br><span class="line">+OK</span><br><span class="line"></span><br><span class="line">MGET java python</span><br><span class="line"></span><br><span class="line">*2</span><br><span class="line"></span><br><span class="line"><span class="variable">$5</span></span><br><span class="line"></span><br><span class="line">jedis</span><br><span class="line"></span><br><span class="line"><span class="variable">$8</span></span><br><span class="line"></span><br><span class="line">redis-py</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-事件"><a href="#4-事件" class="headerlink" title="4.  事件"></a>4.  事件</h3><p>Redis是基于事件驱动，服务器需要处理以下两类事件：</p>
+<p><strong>1)</strong>    文件事件</p>
+<p>Redis服务器通过socket与客户端（或其他Redis服务器）进行连接，而文件事件就是服务器对socket操作的抽象。服务器与客户端（或其他服务器）的通信会产生相应的文件事件，服务器通过监听并处理这些时间来完成网络通信操作。</p>
+<p><strong>2)</strong>    时间事件</p>
+<p>Redis服务器的一些操作（比如serverCron函数）需要在给定的时间点执行，而时间事件就是对此类定时操作的抽象。</p>
+<h4 id="1-文件事件"><a href="#1-文件事件" class="headerlink" title="1)  文件事件"></a>1)  文件事件</h4><p>Redis有自己的文件事件处理器：</p>
+<p><strong>1)</strong>    使用I&#x2F;O多路复用程序来监听多个socket，并根据socket目前执行的任务来为socket关联不同的事件处理器。</p>
+<p><strong>2)</strong>    当被监听的socket准备好执行连接应答(accept)，读取(read)，写入(write)，关闭(close)等操作时，与操作对应的文件事件就会产生。此时文件事件处理器就会调用socket之前的事件处理器来处理这些事件。</p>
+<p>文件事件处理器构成如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/8.png" alt="img"><center><em>文件事件处理器的构成</em></center></p>
+<p><strong>1)</strong>    一个服务器通常会连接多个socket，所以文件事件会有可能并发的出现。</p>
+<p><strong>2)</strong>    I&#x2F;O多路复用程序负责监听，并向文件事件分派器传送那些产生了事件的socket。这个传送过程会首先将socket都放在一个队列中，然后以有序的、同步的、每次一个socket的方式传送给事件分派器。当上一个socket产生的事件被处理完毕后，I&#x2F;O多路复用程序才会向文件事件分派器传送下一个socket。</p>
+<p><strong>3)</strong>    文件事件分派器接收socket之后，会根据socket产生的事件的类型，调用响应的事件处理器。</p>
+<p><strong>4)</strong>    服务器为执行不同任务的socket关联不同的事件处理器，即一个一个不同的函数。</p>
+<p>1.2  时间事件</p>
+<p>Redis服务器将所有的时间事件都放在一个无序链表中，每当时间事件执行器运行时，它就遍历整个链表，查找已经到时的时间事件，并调用相应的事件处理器。这里的无序指的是链表中的事件并没有按照时间排序，而是简单的连在一起。所以必须遍历全部。</p>
+<p>正常模式下的Redis服务器只有一个serverCron时间事件。它的主要工作包括：</p>
+<p><strong>1)</strong>    更新服务器的各类统计信息，比如时间、内存占用、数据库占用情况等。</p>
+<p><strong>2)</strong>    清理过期键值对。</p>
+<p><strong>3)</strong>    关闭和清理连接失败的客户端。</p>
+<p><strong>4)</strong>    尝试进行AOF或者RDB持久化。</p>
+<p><strong>5)</strong>    如果服务器是主服务器，那么对从服务器进行同步。</p>
+<p><strong>6)</strong>    如果处于集群模式，那么进行同步和连接测试。</p>
+<p>1.3  事件的调度和运行</p>
+<p>每次事件循环，服务器都会对文件事件和时间事件进行处理。如下图：</p>
+<p>​<br><img src="/2022/02/15/Redis%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%935-%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%B8%8E%E5%AE%A2%E6%88%B7%E7%AB%AF/9.png" alt="img"><center><em>服务器运行流程</em></center></p>
+<p>文件事件和时间事件是合作关系，服务器会轮流处理这两种时间，并且处理的过程中不会进行资源抢占。</p>
+
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
 
     
 
