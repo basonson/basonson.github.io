@@ -17,14 +17,14 @@ NexT.motion.integrator = {
   bootstrap: function() {
     if (!CONFIG.motion.async) this.queue = [this.queue];
     this.queue.forEach(sequence => {
-      const timeline = window.anime.timeline({
-        duration: 200,
-        easing  : 'linear'
-      });
-      sequence.forEach(item => {
-        if (item.deltaT) timeline.add(item, item.deltaT);
-        else timeline.add(item);
-      });
+      // const timeline = window.anime.timeline({
+      //   duration: 200,
+      //   easing  : 'linear'
+      // });
+      // sequence.forEach(item => {
+      //   if (item.deltaT) timeline.add(item, item.deltaT);
+      //   else timeline.add(item);
+      // });
     });
   }
 };
